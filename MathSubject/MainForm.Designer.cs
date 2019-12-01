@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             this.subBox = new System.Windows.Forms.RichTextBox();
             this.btnPanel = new System.Windows.Forms.FlowLayoutPanel();
             this.btn_copy = new System.Windows.Forms.Button();
@@ -68,6 +69,7 @@
             this.Controls.Add(this.btn_copy);
             this.Controls.Add(this.btnPanel);
             this.Controls.Add(this.subBox);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "MainForm";
             this.Text = "出数学题";
             this.Load += new System.EventHandler(this.MainForm_Load);
