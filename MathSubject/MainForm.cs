@@ -8,54 +8,55 @@ using System.Windows.Forms;
 
 namespace MathSubject
 {
+    /// <summary>
+    /// 主程序窗口
+    /// </summary>
     public partial class MainForm : Form
     {
-        readonly string MathSubject2;//2个数的和
-        readonly string MathSubject3;//3个数的和
-        readonly int maxValue = 10;
-        readonly bool containZero = true;
-        readonly int row_cell_count = 5;
-        readonly Dictionary<string, object> config = new Dictionary<string, object>();
         readonly bool needInit = false;
-        readonly int init_max = 10;
+        readonly RuntimeConfig config;
+        readonly Dictionary<string, object> valuePairs = new Dictionary<string, object>();
+        /// <summary>
+        /// 主程序窗口 构造函数
+        /// </summary>
         public MainForm()
         {
             InitializeComponent();
-            MathSubject2 = ConfigurationManager.AppSettings["subject2_table"];
-            MathSubject3 = ConfigurationManager.AppSettings["subject3_table"];
-            maxValue = int.Parse(ConfigurationManager.AppSettings["max"]);
-            containZero = bool.Parse(ConfigurationManager.AppSettings["containZero"]);
-            row_cell_count = int.Parse(ConfigurationManager.AppSettings["row_cell_count"]);
+
             needInit = bool.Parse(ConfigurationManager.AppSettings["needInit"]);
-            init_max = int.Parse(ConfigurationManager.AppSettings["init_max"]);
+            using (var sr = new System.IO.StreamReader(AppDomain.CurrentDomain.BaseDirectory + "RuntimeConfig.json"))
+            {
+                try
+                {
+                    config = Newtonsoft.Json.JsonConvert.DeserializeObject<RuntimeConfig>(sr.ReadToEnd());
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(ex.Message);
+                    this.Close();
+                }
+            }
+            valuePairs["min"] = config.ResultMinValue;
+            valuePairs["max"] = config.ResultMaxValue;
+            valuePairs["count"] = config.SubjectCount;
         }
 
         private void MainForm_Load(object sender, EventArgs e)
         {
             if (needInit)
             {
-                Init2Number(init_max);
-                Init3Number(init_max);
+                Init2Number(config.ResultMaxValue);
+                Init3Number(config.ResultMaxValue);
                 //初始化完成，需要将配置文件修改位false，然后重启程序
                 MessageBox.Show("请在下次启动程序前，将配置项needInit修改未false！", "初始化完成");
             }
 
-            config["min"] = int.Parse(ConfigurationManager.AppSettings["min"]);
-            config["max"] = maxValue;
-            config["count"] = int.Parse(ConfigurationManager.AppSettings["count"]);
 
-            Text = string.Format("{0}(最小和：{1}，最大和：{2}，总题数：{3}，{4})", Text, config["min"], config["max"], config["count"], containZero ? "包含0" : "不含0");
+            Text = string.Format("{0}(最小和：{1}，最大和：{2}，总题数：{3}，{4})", Text, config.ResultMinValue, config.ResultMaxValue, config.SubjectCount, config.ContainZero ? "包含0" : "不含0");
 
-            string subject2 = ConfigurationManager.AppSettings["subject2"];
-            Regex regex = new Regex("\"(.+)\":\\[(.+)\\]");
-            var group = regex.Matches(subject2);
-            var sql = @"SELECT v1,v2,v3 FROM " + MathSubject2 + " WHERE v3 between :min and :max AND ROWNUM <= :count " + (containZero ? "" : " and v1>0 and v2>0 and v3>0 ") + "ORDER BY DBMS_RANDOM.VALUE";
-            AddSubjects(group, sql, "\t\t");
+            AddSubjects(config.Buttons2, config.Select2, "\t\t");
 
-            string subject3 = ConfigurationManager.AppSettings["subject3"];
-            group = regex.Matches(subject3);
-            sql = @"SELECT v1,v2,v3,v4 FROM " + MathSubject3 + " WHERE v2<>v3 AND v4 between :min and :max AND ROWNUM <= :count " + (containZero ? "" : " and v1>0 and v2>0 and v3>0 and v4>0") + "ORDER BY DBMS_RANDOM.VALUE";
-            AddSubjects(group, sql, "\t");
+            AddSubjects(config.Buttons3, config.Select3, "\t");
         }
         private void btn_copy_Click(object sender, EventArgs e)
         {
@@ -72,7 +73,7 @@ namespace MathSubject
             {
                 x.Open();
                 x.BeginTransaction();
-                var sql = "insert into " + MathSubject2 + "(id,v1,v2,v3) values(:id,:v1,:v2,:v3)";
+
                 var dic = new Dictionary<string, object>();
                 for (int i = 0; i <= max; i++)
                 {
@@ -82,7 +83,7 @@ namespace MathSubject
                         dic["v1"] = i;
                         dic["v2"] = j;
                         dic["v3"] = i + j;
-                        x.Execute(sql, dic);
+                        x.Execute(config.Insert2, dic);
                     }
                 }
                 x.Commit();
@@ -98,7 +99,6 @@ namespace MathSubject
             {
                 x.Open();
                 x.BeginTransaction();
-                var sql = "insert into " + MathSubject3 + "(id,v1,v2,v3,v4) values(:id,:v1,:v2,:v3,:v4)";
                 var dic = new Dictionary<string, object>();
                 for (int i = 0; i <= max; i++)
                 {
@@ -111,7 +111,7 @@ namespace MathSubject
                             dic["v2"] = j;
                             dic["v3"] = k;
                             dic["v4"] = i + j + k;
-                            x.Execute(sql, dic);
+                            x.Execute(config.Insert3, dic);
                         }
                     }
                 }
@@ -126,17 +126,11 @@ namespace MathSubject
         /// <summary>
         /// 添加出题控件
         /// </summary>
-        void AddSubjects(MatchCollection group, string sql, string split)
+        void AddSubjects(Dictionary<string, string[]> buttons, string sql, string split)
         {
-            foreach (Match item in group)
+            foreach (var item in buttons)
             {
-                var text = item.Groups[1].Value;
-                var subjects = item.Groups[2].Value.Split(',');
-                for (int i = 0; i < subjects.Length; i++)
-                {
-                    subjects[i] = subjects[i].Trim().Trim('"');
-                }
-                btnPanel.Controls.Add(AddButton(string.Format(text, maxValue), sql, split, subjects));
+                btnPanel.Controls.Add(AddButton(string.Format(item.Key, config.ResultMaxValue), sql, split, item.Value));
             }
         }
         //按钮宽度
@@ -144,9 +138,8 @@ namespace MathSubject
         /// <summary>
         /// 创建出题按钮
         /// </summary>
-        Button AddButton(string text, string sql, string split, params string[] temp)
+        Button AddButton(string text, string sql, string split, string[] temp)
         {
-
             Button btn = new Button();
             btn.Text = text;
             btn.Width = ButtonWidth;
@@ -155,7 +148,7 @@ namespace MathSubject
                 using (var x = new DBContext())
                 {
                     x.Open();
-                    var tb = x.Query(sql, config);
+                    var tb = x.Query(sql, valuePairs);
 
                     StringBuilder sb = new StringBuilder();
                     sb.AppendLine(btn.Text);
@@ -167,7 +160,7 @@ namespace MathSubject
 
                         sb.AppendFormat(temp[rv], item.ItemArray);
 
-                        if (i % row_cell_count == 0)
+                        if (i % config.LineCount == 0)
                         {
                             sb.AppendLine();
                         }
